@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Circularity Snapshot Report — Loop Lens</title>
+  <meta name="description" content="Answer 15 questions and receive a personalized circular economy maturity report from Loop Lens."/>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;font-family:system-ui,-apple-system,sans-serif;background:#F5F0E8;color:#1A2A22}
+    #root{min-height:100%}
+    .btn-primary{background:#1B3A2D;color:#F5F0E8;border:none;padding:13px 32px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;letter-spacing:0.3px;transition:background 0.15s}
+    .btn-primary:hover{background:#2D5A42}
+    .btn-primary:disabled{background:#C8D8CC;color:#9BB09F;cursor:not-allowed}
+    .btn-copper{background:#C9913D;color:#1B3A2D;border:none;padding:13px 32px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.15s}
+    .btn-copper:hover{background:#D4A048}
+    .btn-copper:disabled{background:#C8D8CC;color:#9BB09F;cursor:not-allowed}
+    .btn-ghost{background:none;border:none;color:#7A9A87;cursor:pointer;font-size:14px;font-family:inherit;padding:0}
+    .opt-btn{display:block;width:100%;text-align:left;padding:11px 14px;border:1.5px solid #C8D8CC;background:#fff;cursor:pointer;font-family:inherit;font-size:14px;color:#1A2A22;transition:all 0.12s;margin-bottom:6px}
+    .opt-btn:hover{border-color:#4A8A63;background:#F0F7F3}
+    .opt-btn.sel-single{border-color:#1B3A2D;background:#1B3A2D;color:#F5F0E8}
+    .opt-btn.sel-multi{border-color:#1B3A2D;background:#EAF3EE;color:#1B3A2D}
+    input[type=text],input[type=email]{border:1.5px solid #C8D8CC;padding:11px 14px;font-size:14px;font-family:inherit;outline:none;width:100%;background:#fff;color:#1A2A22;transition:border-color 0.15s}
+    input:focus{border-color:#4A8A63}
+    textarea{border:1.5px solid #C8D8CC;padding:11px 14px;font-size:14px;font-family:inherit;outline:none;width:100%;background:#fff;color:#1A2A22;resize:vertical;transition:border-color 0.15s}
+    textarea:focus{border-color:#4A8A63}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+    .fade-up{animation:fadeUp 0.4s ease forwards}
+    .spinner{width:48px;height:48px;border:3px solid #2D5A42;border-top-color:#C9913D;border-radius:50%;animation:spin 0.9s linear infinite}
+    .report-bullet{display:flex;gap:8px;margin-bottom:6px}
+    .report-num{display:flex;gap:8px;margin-bottom:8px}
+    @media print{.no-print{display:none!important}}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const{useState,useEffect}=React;
+
+const SECTIONS=[
+  {id:"context",title:"Company Context",questions:[
+    {id:"industry",label:"What industry or sector does your company operate in?",type:"radio",options:["Food & Beverage","Consumer Goods","Retail","Manufacturing","Chemicals","Textiles","Building Materials","Other"]},
+    {id:"size",label:"Approximately how many employees does your company have?",type:"radio",options:["Fewer than 50","50–250","250–1,000","1,000–5,000","More than 5,000"]},
+    {id:"geography",label:"Where does your company primarily operate?",type:"radio",options:["EU only","US only","EU + US","Global"]}
+  ]},
+  {id:"inputs",title:"Material Inputs",questions:[
+    {id:"materials",label:"What are your primary raw materials or inputs?",type:"textarea",placeholder:"e.g. virgin plastics, cotton, timber, aluminum..."},
+    {id:"recycled_pct",label:"What percentage of your inputs come from recycled or secondary sources?",type:"radio",options:["0–10%","11–25%","26–50%","51–75%","75%+","Don't know"]},
+    {id:"supplier_viz",label:"How well do you understand your Tier 1 supplier material flows?",type:"scale",scaleLabels:["Very limited","Excellent"]}
+  ]},
+  {id:"waste",title:"Waste & Outputs",questions:[
+    {id:"waste_types",label:"What types of waste does your operation generate? (select all)",type:"multi",options:["Organic / food","Plastic","Metal","Paper / cardboard","Hazardous","Wastewater","Electronic","Other"]},
+    {id:"landfill_div",label:"What percentage of waste is diverted from landfill?",type:"radio",options:["0–25%","26–50%","51–75%","76–90%","90%+","Don't know"]},
+    {id:"waste_tracking",label:"Do you track waste by material type and weight?",type:"radio",options:["Yes","Partially","No"]}
+  ]},
+  {id:"packaging",title:"Packaging",questions:[
+    {id:"has_pkg",label:"Does your company use product packaging?",type:"radio",options:["Yes","No"]},
+    {id:"pkg_circularity",label:"Which describes your packaging? (select all)",type:"multi",options:["Recyclable materials","Recycled content","Reusable / refillable","Right-sized","Compostable","None of these"],condId:"has_pkg",condVal:"Yes"}
+  ]},
+  {id:"compliance",title:"Reporting & Compliance",questions:[
+    {id:"csrd",label:"Is your company subject to CSRD obligations, or do you expect to be within 2 years?",type:"radio",options:["Yes","No","Unsure"]},
+    {id:"scope3",label:"Are you currently measuring Scope 3 emissions, particularly upstream material categories?",type:"radio",options:["Yes","Partially","No"]}
+  ]},
+  {id:"maturity",title:"Circular Economy Maturity",questions:[
+    {id:"ce_strategy",label:"Does your company have a formal circular economy or resource efficiency strategy?",type:"radio",options:["Yes, documented","In development","No"]},
+    {id:"barriers",label:"What are your biggest barriers to improving circularity? (select all)",type:"multi",options:["Data gaps","Cost / budget","Supplier engagement","Internal expertise","Regulatory uncertainty","No clear ownership"]}
+  ]}
+];
+
+function buildMsg(answers,lead){
+  const labels={industry:"Industry",size:"Employee count",geography:"Region",materials:"Primary inputs",recycled_pct:"% recycled inputs",supplier_viz:"Tier 1 visibility (1-5)",waste_types:"Waste types",landfill_div:"% landfill diversion",waste_tracking:"Waste tracking",has_pkg:"Uses packaging",pkg_circularity:"Packaging attributes",csrd:"CSRD obligation",scope3:"Scope 3 measurement",ce_strategy:"CE strategy",barriers:"Barriers"};
+  let lines=[`Company: ${lead.company}`,`Contact: ${lead.name}`,``];
+  Object.entries(labels).forEach(([id,label])=>{
+    const v=answers[id];
+    if(v!==undefined&&v!=="")lines.push(`${label}: ${Array.isArray(v)?v.join(", "):v}`);
+  });
+  return lines.join("\n");
+}
+
+function RadioQ({q,value,onAns}){return React.createElement("div",null,q.options.map(opt=>React.createElement("button",{key:opt,className:"opt-btn"+(value===opt?" sel-single":""),onClick:()=>onAns(q.id,opt)},opt)))}
+function MultiQ({q,value=[],onAns}){const toggle=opt=>{const cur=value||[];onAns(q.id,cur.includes(opt)?cur.filter(x=>x!==opt):[...cur,opt])};return React.createElement("div",null,q.options.map(opt=>React.createElement("button",{key:opt,className:"opt-btn"+(value?.includes(opt)?" sel-multi":""),onClick:()=>toggle(opt)},value?.includes(opt)?"✓ "+opt:opt)))}
+function ScaleQ({q,value,onAns}){return React.createElement("div",null,React.createElement("div",{style:{display:"flex",gap:"8px",marginBottom:"8px"}},[1,2,3,4,5].map(n=>React.createElement("button",{key:n,onClick:()=>onAns(q.id,n),style:{width:"52px",height:"52px",border:value===n?"2px solid #1B3A2D":"1.5px solid #C8D8CC",background:value===n?"#1B3A2D":"#fff",color:value===n?"#F5F0E8":"#1A2A22",cursor:"pointer",fontFamily:"inherit",fontSize:"17px",fontWeight:"500"}},n))),React.createElement("div",{style:{display:"flex",justifyContent:"space-between",fontSize:"12px",color:"#7A9A87"}},React.createElement("span",null,q.scaleLabels[0]),React.createElement("span",null,q.scaleLabels[1])))}
+function QBlock({q,answers,onAns}){if(q.condId&&answers[q.condId]!==q.condVal)return null;const v=answers[q.id];return React.createElement("div",{style:{marginBottom:"26px"}},React.createElement("p",{style:{fontSize:"15px",fontWeight:"500",marginBottom:"12px",color:"#1A2A22",lineHeight:"1.5"}},q.label),q.type==="radio"&&React.createElement(RadioQ,{q,value:v,onAns}),q.type==="multi"&&React.createElement(MultiQ,{q,value:v,onAns}),q.type==="scale"&&React.createElement(ScaleQ,{q,value:v,onAns}),q.type==="textarea"&&React.createElement("textarea",{value:v||"",onChange:e=>onAns(q.id,e.target.value),placeholder:q.placeholder,rows:3}))}
+
+function IntroScreen({onStart}){return React.createElement("div",{className:"fade-up",style:{background:"#1B3A2D",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:"48px 24px"}},React.createElement("div",{style:{maxWidth:"480px",textAlign:"center"}},React.createElement("div",{style:{display:"inline-flex",alignItems:"center",gap:"10px",marginBottom:"48px"}},React.createElement("div",{style:{width:"32px",height:"32px",border:"2px solid #C9913D",borderRadius:"50%"}}),React.createElement("span",{style:{fontSize:"18px",color:"#F5F0E8",letterSpacing:"0.5px"}},"Loop Lens")),React.createElement("h1",{style:{fontFamily:"Georgia,serif",fontSize:"clamp(26px,5vw,40px)",color:"#F5F0E8",fontWeight:"400",lineHeight:"1.2",marginBottom:"20px"}},"Circularity Snapshot Report"),React.createElement("p",{style:{color:"#8BAF8B",fontSize:"15px",lineHeight:"1.7",marginBottom:"36px"}},"Answer 15 questions about your operations and receive a personalized assessment of your circular economy maturity — with specific recommendations tied to ESRS E5 and Material Flow Analysis."),React.createElement("div",{style:{display:"flex",gap:"28px",justifyContent:"center",marginBottom:"36px"}},["6 sections","~5 minutes","Free report"].map(t=>React.createElement("span",{key:t,style:{fontSize:"13px",color:"#C9913D",fontWeight:"500"}},t))),React.createElement("button",{className:"btn-copper",onClick:onStart,style:{width:"100%",maxWidth:"280px",padding:"15px"}},"Begin Assessment →")))}
+
+function SurveyScreen({section,sectionIdx,onNext,onBack,answers,onAns}){const progress=((sectionIdx+1)/(SECTIONS.length+1))*100;const required=section.questions.filter(q=>{if(q.condId&&answers[q.condId]!==q.condVal)return false;return q.type!=="textarea"});const answered=required.filter(q=>{const v=answers[q.id];return v!==undefined&&(Array.isArray(v)?v.length>0:true)});const canProceed=answered.length>=required.length;return React.createElement("div",{className:"fade-up",style:{background:"#F5F0E8",minHeight:"100vh",display:"flex",flexDirection:"column"}},React.createElement("div",{style:{background:"#1B3A2D"}},React.createElement("div",{style:{maxWidth:"640px",margin:"0 auto",padding:"14px 24px",display:"flex",justifyContent:"space-between",alignItems:"center"}},React.createElement("span",{style:{fontFamily:"Georgia,serif",fontSize:"15px",color:"#F5F0E8"}},"Loop Lens"),React.createElement("span",{style:{fontSize:"13px",color:"#8BAF8B"}},`${sectionIdx+1} of ${SECTIONS.length+1}`)),React.createElement("div",{style:{height:"3px",background:"#2D5A42"}},React.createElement("div",{style:{height:"100%",background:"#C9913D",width:`${progress}%`,transition:"width 0.4s ease"}}))),React.createElement("div",{style:{flex:1,maxWidth:"640px",margin:"0 auto",width:"100%",padding:"36px 24px"}},React.createElement("p",{style:{fontSize:"11px",color:"#C9913D",fontWeight:"600",letterSpacing:"1.5px",textTransform:"uppercase",marginBottom:"6px"}},`Section ${sectionIdx+1}`),React.createElement("h2",{style:{fontFamily:"Georgia,serif",fontSize:"26px",fontWeight:"400",color:"#1B3A2D",marginBottom:"28px"}},section.title),section.questions.map(q=>React.createElement(QBlock,{key:q.id,q,answers,onAns})),React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:"8px",paddingTop:"16px",borderTop:"1px solid #D8E8DC"}},sectionIdx>0?React.createElement("button",{className:"btn-ghost",onClick:onBack},"← Back"):React.createElement("div"),React.createElement("button",{className:"btn-primary",onClick:onNext,disabled:!canProceed},sectionIdx===SECTIONS.length-1?"Final Step →":"Continue →"))))}
+
+function LeadScreen({lead,onChange,onSubmit,error}){const valid=lead.name&&lead.company&&lead.email&&lead.email.includes("@");const field=(label,key,type,ph)=>React.createElement("div",{style:{marginBottom:"14px"}},React.createElement("label",{style:{display:"block",fontSize:"13px",fontWeight:"500",color:"#3D5A4A",marginBottom:"5px"}},label),React.createElement("input",{type,value:lead[key],onChange:e=>onChange({...lead,[key]:e.target.value}),placeholder:ph}));return React.createElement("div",{className:"fade-up",style:{background:"#F5F0E8",minHeight:"100vh",display:"flex",flexDirection:"column"}},React.createElement("div",{style:{background:"#1B3A2D"}},React.createElement("div",{style:{maxWidth:"640px",margin:"0 auto",padding:"14px 24px",display:"flex",justifyContent:"space-between",alignItems:"center"}},React.createElement("span",{style:{fontFamily:"Georgia,serif",fontSize:"15px",color:"#F5F0E8"}},"Loop Lens"),React.createElement("span",{style:{fontSize:"13px",color:"#8BAF8B"}},"Final step")),React.createElement("div",{style:{height:"3px",background:"#2D5A42"}},React.createElement("div",{style:{height:"100%",background:"#C9913D",width:"95%"}}))),React.createElement("div",{style:{flex:1,maxWidth:"640px",margin:"0 auto",width:"100%",padding:"36px 24px"}},React.createElement("p",{style:{fontSize:"11px",color:"#C9913D",fontWeight:"600",letterSpacing:"1.5px",textTransform:"uppercase",marginBottom:"6px"}},"Almost there"),React.createElement("h2",{style:{fontFamily:"Georgia,serif",fontSize:"26px",fontWeight:"400",color:"#1B3A2D",marginBottom:"6px"}},"Where should we send your report?"),React.createElement("p",{style:{color:"#7A9A87",fontSize:"14px",marginBottom:"28px"}},"Your report will be displayed here and emailed to you."),field("Full name","name","text","Jane Smith"),field("Company","company","text","Acme Corporation"),field("Work email","email","email","jane@company.com"),error&&React.createElement("p",{style:{color:"#C0392B",fontSize:"13px",marginBottom:"12px"}},error),React.createElement("button",{className:"btn-copper",onClick:onSubmit,disabled:!valid,style:{width:"100%",padding:"15px",marginTop:"4px"}},"Generate My Report →"),React.createElement("p",{style:{fontSize:"12px",color:"#9BB09F",marginTop:"10px",textAlign:"center"}},"Your data is used only to generate your report.")))}
+
+function LoadingScreen(){const[step,setStep]=useState(0);const steps=["Analyzing your material flow profile...","Assessing circularity maturity...","Evaluating ESRS E5 readiness...","Generating recommendations..."];useEffect(()=>{const i=setInterval(()=>setStep(s=>(s+1)%4),1800);return()=>clearInterval(i)},[]);return React.createElement("div",{style:{background:"#1B3A2D",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:"24px",padding:"48px"}},React.createElement("div",{className:"spinner"}),React.createElement("h2",{style:{fontFamily:"Georgia,serif",fontSize:"22px",color:"#F5F0E8",fontWeight:"400"}},"Building your report"),React.createElement("p",{style:{color:"#8BAF8B",fontSize:"14px",minHeight:"22px"}},steps[step]))}
+
+function ReportScreen({report,lead}){const sections=report.split("##").filter(Boolean).map(s=>{const lines=s.trim().split("\n");return{title:lines[0].trim(),body:lines.slice(1).join("\n").trim()}});const scoreSec=sections.find(s=>s.title.includes("Score:"));const scoreMatch=scoreSec?.title.match(/(\d+)\/10/);const score=scoreMatch?parseInt(scoreMatch[1]):null;const rest=sections.filter(s=>!s.title.includes("Score:"));function renderBody(body){return body.split("\n").map((line,i)=>{if(line.startsWith("•")||line.startsWith("-"))return React.createElement("div",{key:i,className:"report-bullet"},React.createElement("span",{style:{color:"#C9913D",marginTop:"3px",flexShrink:0}},"•"),React.createElement("span",null,line.replace(/^[•\-]\s*/,"")));if(/^\d\./.test(line))return React.createElement("div",{key:i,className:"report-num"},React.createElement("span",{style:{color:"#C9913D",fontWeight:"600",minWidth:"20px",flexShrink:0}},line.match(/^\d/)[0]+"."),React.createElement("span",null,line.replace(/^\d\.\s*/,"")));if(!line.trim())return React.createElement("div",{key:i,style:{height:"8px"}});return React.createElement("p",{key:i,style:{lineHeight:"1.7",marginBottom:"6px"}},line)})}return React.createElement("div",{className:"fade-up",style:{background:"#F5F0E8",minHeight:"100vh"}},React.createElement("div",{style:{background:"#1B3A2D",padding:"16px 24px",display:"flex",justifyContent:"space-between",alignItems:"center"},className:"no-print"},React.createElement("span",{style:{fontFamily:"Georgia,serif",fontSize:"15px",color:"#F5F0E8"}},"Loop Lens"),React.createElement("button",{onClick:()=>window.print(),style:{background:"none",border:"1px solid #4A8A63",color:"#8BAF8B",padding:"7px 14px",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}},"Save PDF")),React.createElement("div",{style:{maxWidth:"680px",margin:"0 auto",padding:"32px 24px"}},React.createElement("div",{style:{background:"#1B3A2D",padding:"36px",marginBottom:"28px"}},React.createElement("p",{style:{fontSize:"10px",color:"#C9913D",fontWeight:"600",letterSpacing:"2px",textTransform:"uppercase",marginBottom:"10px"}},"Circularity Snapshot Report"),React.createElement("h1",{style:{fontFamily:"Georgia,serif",fontSize:"clamp(22px,4vw,32px)",color:"#F5F0E8",fontWeight:"400",marginBottom:"6px"}},lead.company),React.createElement("p",{style:{color:"#8BAF8B",fontSize:"13px",marginBottom:"20px"}},"Prepared for "+lead.name+" · "+new Date().toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})),score&&React.createElement("div",{style:{display:"flex",alignItems:"center",gap:"18px"}},React.createElement("div",{style:{width:"72px",height:"72px",borderRadius:"50%",border:"3px solid #C9913D",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",flexShrink:0}},React.createElement("span",{style:{fontFamily:"Georgia,serif",fontSize:"26px",color:"#F5F0E8",lineHeight:"1"}},score),React.createElement("span",{style:{fontSize:"11px",color:"#8BAF8B"}},"/10")),React.createElement("div",null,React.createElement("p",{style:{color:"#C9913D",fontSize:"11px",fontWeight:"600",letterSpacing:"1px",textTransform:"uppercase",marginBottom:"4px"}},"Circularity Maturity"),React.createElement("p",{style:{color:"#8BAF8B",fontSize:"13px",lineHeight:"1.5"}},scoreSec?.body||"")))),rest.map((s,i)=>React.createElement("div",{key:i,style:{marginBottom:"24px",paddingBottom:"24px",borderBottom:"1px solid #D8E8DC"}},React.createElement("h3",{style:{fontFamily:"Georgia,serif",fontSize:"19px",fontWeight:"400",color:"#1B3A2D",marginBottom:"14px"}},s.title),React.createElement("div",{style:{fontSize:"14px",color:"#3D5A4A",lineHeight:"1.7"}},renderBody(s.body)))),React.createElement("div",{style:{background:"#1B3A2D",padding:"28px",textAlign:"center",marginTop:"12px"}},React.createElement("p",{style:{color:"#8BAF8B",fontSize:"13px",marginBottom:"6px"}},"Ready to go deeper?"),React.createElement("p",{style:{fontFamily:"Georgia,serif",fontSize:"18px",color:"#F5F0E8",marginBottom:"18px"}},"A full Material Flow Analysis can quantify every finding above."),React.createElement("a",{href:"https://www.looplens.co",target:"_blank",rel:"noreferrer",style:{display:"inline-block",background:"#C9913D",color:"#1B3A2D",padding:"13px 28px",fontSize:"14px",fontWeight:"600",textDecoration:"none"}},"Connect with Loop Lens →")),React.createElement("p",{style:{textAlign:"center",color:"#9BB09F",fontSize:"12px",marginTop:"20px"}},"© Loop Lens · looplens.co")))}
+
+function App(){
+  const[phase,setPhase]=useState("intro");
+  const[sectionIdx,setSectionIdx]=useState(0);
+  const[answers,setAnswers]=useState({});
+  const[lead,setLead]=useState({name:"",company:"",email:""});
+  const[report,setReport]=useState("");
+  const[error,setError]=useState("");
+  const onAns=(id,val)=>setAnswers(prev=>({...prev,[id]:val}));
+  const onNext=()=>sectionIdx<SECTIONS.length-1?setSectionIdx(i=>i+1):setPhase("lead");
+  const onBack=()=>sectionIdx>0?setSectionIdx(i=>i-1):setPhase("intro");
+  const generate=async()=>{
+    setError("");setPhase("loading");
+    try{
+      // In production: calls Netlify function (keeps API key server-side)
+      const res=await fetch("/api/generate-report",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({answers,lead})
+      });
+      const data=await res.json();
+      if(data.report){setReport(data.report);setPhase("report")}
+      else throw new Error("No report");
+    }catch(e){setError("Something went wrong — please try again.");setPhase("lead")}
+  };
+  if(phase==="intro")return React.createElement(IntroScreen,{onStart:()=>setPhase("survey")});
+  if(phase==="survey")return React.createElement(SurveyScreen,{section:SECTIONS[sectionIdx],sectionIdx,onNext,onBack,answers,onAns});
+  if(phase==="lead")return React.createElement(LeadScreen,{lead,onChange:setLead,onSubmit:generate,error});
+  if(phase==="loading")return React.createElement(LoadingScreen);
+  if(phase==="report")return React.createElement(ReportScreen,{report,lead});
+  return null;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>
