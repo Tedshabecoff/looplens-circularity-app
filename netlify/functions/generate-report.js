@@ -9,7 +9,7 @@ Use exactly these section headers:
 [one sentence rationale]
 
 ## Executive Summary
-[2 short paragraphs on the company's circular economy position]
+[2 D0short paragraphs on the company's circular economy position]
 
 ## Key Findings
 [3-4 specific bullet points starting with • tied directly to their answers]
