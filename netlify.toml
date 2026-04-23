@@ -3,6 +3,12 @@
   functions = "netlify/functions"
 
 [[redirects]]
+  from = "http://circularity.looplens.co/*"
+  to   = "https://circularity.looplens.co/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
   from = "/api/generate-report"
   to   = "/.netlify/functions/generate-report"
   status = 200
