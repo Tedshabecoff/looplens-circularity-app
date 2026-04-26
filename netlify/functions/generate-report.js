@@ -153,8 +153,12 @@ exports.handler = async function (event) {
       }),
     });
     const anthropicData = await anthropicRes.json();
-    reportText = anthropicData.content?.[0]?.text;
-    if (!reportText) throw new Error("Empty Anthropic response");
+if (!anthropicRes.ok || anthropicData.type === 'error') {
+  console.error("Anthropic API error:", JSON.stringify(anthropicData));
+  throw new Error("Anthropic API error: " + JSON.stringify(anthropicData));
+}
+reportText = anthropicData.content?.[0]?.text;
+if (!reportText) throw new Error("Empty Anthropic response");
   } catch (err) {
     console.error("Anthropic error:", err);
     return { statusCode: 500, body: JSON.stringify({ error: "Report generation failed" }) };
