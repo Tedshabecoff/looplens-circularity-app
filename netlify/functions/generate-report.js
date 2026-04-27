@@ -185,7 +185,7 @@ if (!reportText) throw new Error("Empty Anthropic response");
           CIRCULARITY_SCORE: score,
           SOURCE:    "Circularity Snapshot Tool",
         },
-        listIds: [2], // ← Replace 2 with your Brevo "Loop Lens Leads" list ID
+         listIds: [], // ← Replace 2 with your Brevo "Loop Lens Leads" list ID
         updateEnabled: true,
       }),
     });
