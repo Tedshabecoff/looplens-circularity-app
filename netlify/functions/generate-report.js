@@ -208,6 +208,7 @@ if (!reportText) throw new Error("Empty Anthropic response");
           email: process.env.BREVO_SENDER_EMAIL, // must be verified in Brevo
         },
         to: [{ email: lead.email, name: lead.name }],
+cc: [{ email: "tshabecoff@gmail.com", name: "Ted Shabecoff" }],
         subject: `Your Circularity Snapshot Report — ${lead.company}`,
         htmlContent: reportToHtml(reportText, lead),
       }),
