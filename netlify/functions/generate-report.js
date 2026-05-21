@@ -1,6 +1,5 @@
 // Loop Lens — Netlify Serverless Function
-// Calls Anthropic API to generate report, then logs lead + emails report via Brevo
-// Required env vars: ANTHROPIC_API_KEY, BREVO_API_KEY, BREVO_SENDER_EMAIL
+// Generates report via Anthropic, emails to user + ted, logs lead in Brevo CRM
 
 const SYSTEM_PROMPT = `You are a senior circular economy consultant and Material Flow Analysis (MFA) specialist at Loop Lens. Generate a concise professional Circularity Snapshot Report from questionnaire answers.
 
@@ -9,7 +8,7 @@ Use exactly these section headers:
 [one sentence rationale]
 
 ## Executive Summary
-[2 D0short paragraphs on the company's circular economy position]
+[2 short paragraphs on the company's circular economy position]
 
 ## Key Findings
 [3-4 specific bullet points starting with • tied directly to their answers]
@@ -26,15 +25,6 @@ Use exactly these section headers:
 [2-3 sentences on how a Material Flow Analysis by Loop Lens would unlock deeper insights for this specific company]
 
 Be specific. Reference their actual answers. Avoid generic statements.`;
-
-const SECTIONS = [
-  { id: "context",    title: "Company Context" },
-  { id: "inputs",     title: "Material Inputs" },
-  { id: "waste",      title: "Waste & Outputs" },
-  { id: "packaging",  title: "Packaging" },
-  { id: "compliance", title: "Reporting & Compliance" },
-  { id: "maturity",   title: "Circular Economy Maturity" },
-];
 
 const QUESTION_LABELS = {
   industry:       "Industry / sector",
@@ -65,32 +55,29 @@ function buildUserMessage(answers, lead) {
   return lines.join("\n");
 }
 
-// Convert report markdown to plain-text HTML for email
 function reportToHtml(report, lead) {
   const rows = report.split("##").filter(Boolean).map(s => {
     const lines = s.trim().split("\n");
     return { title: lines[0].trim(), body: lines.slice(1).join("\n").trim() };
   });
 
-  const sectionsHtml = rows.map(r => `
-    <h2 style="font-family:Georgia,serif;font-size:18px;color:#1B3A2D;margin:24px 0 10px;">${r.title}</h2>
-    <div style="font-size:14px;color:#3D5A4A;line-height:1.7;">${
-      r.body
-        .split("\n")
-        .map(line => {
+  const sectionsHtml = rows
+    .filter(r => !r.title.startsWith("#"))
+    .map(r => `
+      <h2 style="font-family:Georgia,serif;font-size:18px;color:#1B3A2D;margin:24px 0 10px;">${r.title}</h2>
+      <div style="font-size:14px;color:#3D5A4A;line-height:1.7;">${
+        r.body.split("\n").map(line => {
           if (line.startsWith("•") || line.startsWith("-"))
-            return `<p style="margin:4px 0;">&#8226; ${line.replace(/^[•\-]\s*/, "")}</p>`;
+            return `<p style="margin:4px 0;">&#8226; ${line.replace(/^[•\-]\s*/, "").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")}</p>`;
           if (/^\d\./.test(line))
-            return `<p style="margin:6px 0;"><strong>${line.match(/^\d/)[0]}.</strong> ${line.replace(/^\d\.\s*/, "")}</p>`;
+            return `<p style="margin:6px 0;"><strong>${line.match(/^\d/)[0]}.</strong> ${line.replace(/^\d\.\s*/, "").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")}</p>`;
           if (!line.trim()) return "<br/>";
-          return `<p style="margin:6px 0;">${line}</p>`;
-        })
-        .join("")
-    }</div>
-  `).join("<hr style='border:0;border-top:1px solid #D8E8DC;margin:20px 0;'/>");
+          return `<p style="margin:6px 0;">${line.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")}</p>`;
+        }).join("")
+      }</div>
+    `).join("<hr style='border:0;border-top:1px solid #D8E8DC;margin:20px 0;'/>");
 
-  return `
-<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"><title>Loop Lens Circularity Report</title></head>
 <body style="margin:0;padding:0;background:#F5F0E8;">
@@ -152,25 +139,69 @@ exports.handler = async function (event) {
         messages: [{ role: "user", content: buildUserMessage(answers, lead) }],
       }),
     });
+
     const anthropicData = await anthropicRes.json();
-if (!anthropicRes.ok || anthropicData.type === 'error') {
-  console.error("Anthropic API error:", JSON.stringify(anthropicData));
-  throw new Error("Anthropic API error: " + JSON.stringify(anthropicData));
-}
-reportText = anthropicData.content?.[0]?.text;
-if (!reportText) throw new Error("Empty Anthropic response");
+    console.log("Anthropic status:", anthropicRes.status);
+
+    if (!anthropicRes.ok || anthropicData.type === "error") {
+      console.error("Anthropic error:", JSON.stringify(anthropicData));
+      throw new Error("Anthropic error: " + JSON.stringify(anthropicData));
+    }
+
+    reportText = anthropicData.content?.[0]?.text;
+    if (!reportText) throw new Error("Empty Anthropic response");
+    console.log("Report generated, length:", reportText.length);
+
   } catch (err) {
-    console.error("Anthropic error:", err);
+    console.error("Anthropic error:", err.message);
     return { statusCode: 500, body: JSON.stringify({ error: "Report generation failed" }) };
   }
 
-  // ── 2. Log lead in Brevo CRM ─────────────────────────────────────────────────
-  // Extract circularity score from report for CRM tagging
-  const scoreMatch = reportText.match(/Score:\s*(\d+)\/10/);
-  const score = scoreMatch ? scoreMatch[1] : "unknown";
+  // ── 2. Send email via Brevo to user + Ted ─────────────────────────────────
+  const htmlContent = reportToHtml(reportText, lead);
 
   try {
-    await fetch("https://api.brevo.com/v3/contacts", {
+    const emailPayload = {
+      sender: {
+        name: "Loop Lens",
+        email: process.env.BREVO_SENDER_EMAIL,
+      },
+      to: [{ email: lead.email, name: lead.name }],
+      bcc: [{ email: "tshabecoff@gmail.com", name: "Ted Shabecoff" }],
+      subject: `Your Circularity Snapshot Report — ${lead.company}`,
+      htmlContent,
+    };
+
+    console.log("Sending email to:", lead.email, "BCC: tshabecoff@gmail.com");
+    console.log("Sender:", process.env.BREVO_SENDER_EMAIL);
+
+    const emailRes = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "api-key": process.env.BREVO_API_KEY,
+      },
+      body: JSON.stringify(emailPayload),
+    });
+
+    const emailData = await emailRes.json();
+    console.log("Brevo email response status:", emailRes.status);
+    console.log("Brevo email response:", JSON.stringify(emailData));
+
+    if (!emailRes.ok) {
+      console.error("Brevo email failed:", JSON.stringify(emailData));
+    }
+
+  } catch (err) {
+    console.error("Email error:", err.message);
+  }
+
+  // ── 3. Log lead in Brevo CRM (non-fatal) ─────────────────────────────────
+  try {
+    const scoreMatch = reportText.match(/Score:\s*(\d+)\/10/);
+    const score = scoreMatch ? scoreMatch[1] : "unknown";
+
+    const crmRes = await fetch("https://api.brevo.com/v3/contacts", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -183,38 +214,18 @@ if (!reportText) throw new Error("Empty Anthropic response");
           LASTNAME:  lead.name.split(" ").slice(1).join(" ") || "",
           COMPANY:   lead.company,
           CIRCULARITY_SCORE: score,
-          SOURCE:    "Circularity Snapshot Tool",
+          SOURCE: "Circularity Snapshot Tool",
         },
-         listIds: [], // ← Replace 2 with your Brevo "Loop Lens Leads" list ID
+        listIds: [],
         updateEnabled: true,
       }),
     });
-  } catch (err) {
-    // Non-fatal — log but continue
-    console.error("Brevo CRM error:", err);
-  }
 
-  // ── 3. Email report via Brevo ─────────────────────────────────────────────────
-  try {
-    await fetch("https://api.brevo.com/v3/smtp/email", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "api-key": process.env.BREVO_API_KEY,
-      },
-      body: JSON.stringify({
-        sender: {
-          name: "Loop Lens",
-          email: process.env.BREVO_SENDER_EMAIL, // must be verified in Brevo
-        },
-        to: [{ email: lead.email, name: lead.name }],
-cc: [{ email: "tshabecoff@gmail.com", name: "Ted Shabecoff" }],
-        subject: `Your Circularity Snapshot Report — ${lead.company}`,
-        htmlContent: reportToHtml(reportText, lead),
-      }),
-    });
+    const crmData = await crmRes.json();
+    console.log("Brevo CRM response:", emailRes.status, JSON.stringify(crmData));
+
   } catch (err) {
-    console.error("Brevo email error:", err);
+    console.error("Brevo CRM error:", err.message);
   }
 
   return {
