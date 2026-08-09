@@ -1,5 +1,6 @@
-// Loop Lens — Netlify Serverless Function
-// Generates report via Anthropic, emails to user + ted, logs lead in Brevo CRM
+// Loop Lens — Circularity Snapshot Tool
+// Generates report via Anthropic, then notifies ted@looplens.co via Netlify Forms.
+// Required env var: ANTHROPIC_API_KEY   (Brevo is no longer required)
 
 const SYSTEM_PROMPT = `You are a senior circular economy consultant and Material Flow Analysis (MFA) specialist at Loop Lens. Generate a concise professional Circularity Snapshot Report from questionnaire answers.
 
@@ -27,85 +28,35 @@ Use exactly these section headers:
 Be specific. Reference their actual answers. Avoid generic statements.`;
 
 const QUESTION_LABELS = {
-  industry:       "Industry / sector",
-  size:           "Employee count",
-  geography:      "Primary operating region",
-  materials:      "Primary raw materials / inputs",
-  recycled_pct:   "% inputs from recycled sources",
-  supplier_viz:   "Tier 1 supplier material flow visibility (1–5)",
-  waste_types:    "Waste types generated",
-  landfill_div:   "% waste diverted from landfill",
-  waste_tracking: "Tracks waste by material type and weight",
-  has_pkg:        "Uses product packaging",
-  pkg_circularity:"Packaging circularity attributes",
-  csrd:           "CSRD obligation (current or expected within 2 yrs)",
-  scope3:         "Measuring Scope 3 upstream material emissions",
-  ce_strategy:    "Formal circular economy / resource efficiency strategy",
-  barriers:       "Biggest barriers to improving circularity",
+  industry:        "Industry / sector",
+  size:            "Employee count",
+  geography:       "Primary operating region",
+  materials:       "Primary raw materials / inputs",
+  recycled_pct:    "% inputs from recycled sources",
+  supplier_viz:    "Tier 1 supplier material flow visibility (1-5)",
+  waste_types:     "Waste types generated",
+  landfill_div:    "% waste diverted from landfill",
+  waste_tracking:  "Tracks waste by material type and weight",
+  has_pkg:         "Uses product packaging",
+  pkg_circularity: "Packaging circularity attributes",
+  csrd:            "CSRD obligation (current or expected within 2 yrs)",
+  scope3:          "Measuring Scope 3 upstream material emissions",
+  ce_strategy:     "Formal circular economy / resource efficiency strategy",
+  barriers:        "Biggest barriers to improving circularity",
 };
+
+function val(v) {
+  if (v === undefined || v === null || v === "") return "";
+  return Array.isArray(v) ? v.join(", ") : String(v);
+}
 
 function buildUserMessage(answers, lead) {
   const lines = [`Company: ${lead.company}`, `Contact: ${lead.name}`, ""];
   Object.entries(QUESTION_LABELS).forEach(([id, label]) => {
-    const v = answers[id];
-    if (v !== undefined && v !== "") {
-      lines.push(`${label}: ${Array.isArray(v) ? v.join(", ") : v}`);
-    }
+    const v = val(answers[id]);
+    if (v) lines.push(`${label}: ${v}`);
   });
   return lines.join("\n");
-}
-
-function reportToHtml(report, lead) {
-  const rows = report.split("##").filter(Boolean).map(s => {
-    const lines = s.trim().split("\n");
-    return { title: lines[0].trim(), body: lines.slice(1).join("\n").trim() };
-  });
-
-  const sectionsHtml = rows
-    .filter(r => !r.title.startsWith("#"))
-    .map(r => `
-      <h2 style="font-family:Georgia,serif;font-size:18px;color:#1B3A2D;margin:24px 0 10px;">${r.title}</h2>
-      <div style="font-size:14px;color:#3D5A4A;line-height:1.7;">${
-        r.body.split("\n").map(line => {
-          if (line.startsWith("•") || line.startsWith("-"))
-            return `<p style="margin:4px 0;">&#8226; ${line.replace(/^[•\-]\s*/, "").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")}</p>`;
-          if (/^\d\./.test(line))
-            return `<p style="margin:6px 0;"><strong>${line.match(/^\d/)[0]}.</strong> ${line.replace(/^\d\.\s*/, "").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")}</p>`;
-          if (!line.trim()) return "<br/>";
-          return `<p style="margin:6px 0;">${line.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")}</p>`;
-        }).join("")
-      }</div>
-    `).join("<hr style='border:0;border-top:1px solid #D8E8DC;margin:20px 0;'/>");
-
-  return `<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"><title>Loop Lens Circularity Report</title></head>
-<body style="margin:0;padding:0;background:#F5F0E8;">
-  <table width="100%" cellpadding="0" cellspacing="0">
-    <tr><td align="center" style="padding:32px 16px;">
-      <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;max-width:600px;">
-        <tr>
-          <td style="background:#1B3A2D;padding:28px 36px;">
-            <p style="color:#C9913D;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin:0 0 8px;">Loop Lens</p>
-            <h1 style="font-family:Georgia,serif;font-size:28px;color:#F5F0E8;font-weight:400;margin:0 0 6px;">Circularity Snapshot Report</h1>
-            <p style="color:#8BAF8B;font-size:13px;margin:0;">${lead.company} · ${lead.name}</p>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:32px 36px;font-family:system-ui,sans-serif;">
-            ${sectionsHtml}
-            <div style="background:#1B3A2D;padding:24px;text-align:center;margin-top:28px;">
-              <p style="color:#8BAF8B;font-size:13px;margin:0 0 12px;">Ready to go deeper?</p>
-              <a href="https://www.looplens.co" style="display:inline-block;background:#C9913D;color:#1B3A2D;padding:12px 28px;font-size:14px;font-weight:600;text-decoration:none;">Connect with Loop Lens →</a>
-            </div>
-            <p style="text-align:center;color:#9BB09F;font-size:11px;margin-top:20px;">© Loop Lens · looplens.co</p>
-          </td>
-        </tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
 }
 
 exports.handler = async function (event) {
@@ -120,12 +71,12 @@ exports.handler = async function (event) {
     return { statusCode: 400, body: JSON.stringify({ error: "Invalid JSON" }) };
   }
 
-  const { answers, lead } = body;
+  const { answers = {}, lead = {} } = body;
 
-  // ── 1. Generate report via Anthropic ────────────────────────────────────────
+  // ── 1. Generate the report ────────────────────────────────────────────────
   let reportText;
   try {
-    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -140,92 +91,73 @@ exports.handler = async function (event) {
       }),
     });
 
-    const anthropicData = await anthropicRes.json();
-    console.log("Anthropic status:", anthropicRes.status);
+    const data = await res.json();
+    console.log("Anthropic status:", res.status);
 
-    if (!anthropicRes.ok || anthropicData.type === "error") {
-      console.error("Anthropic error:", JSON.stringify(anthropicData));
-      throw new Error("Anthropic error: " + JSON.stringify(anthropicData));
+    if (!res.ok || data.type === "error") {
+      console.error("Anthropic error:", JSON.stringify(data));
+      throw new Error("Anthropic error");
     }
 
-    reportText = anthropicData.content?.[0]?.text;
+    reportText = data.content?.[0]?.text;
     if (!reportText) throw new Error("Empty Anthropic response");
     console.log("Report generated, length:", reportText.length);
 
   } catch (err) {
-    console.error("Anthropic error:", err.message);
+    console.error("Report generation failed:", err.message);
     return { statusCode: 500, body: JSON.stringify({ error: "Report generation failed" }) };
   }
 
-  // ── 2. Send email via Brevo to user + Ted ─────────────────────────────────
-  const htmlContent = reportToHtml(reportText, lead);
-
+  // ── 2. Notify ted@looplens.co via Netlify Forms ───────────────────────────
+  // No API key. Netlify emails whoever is configured under
+  // Forms > circularity-lead > Form notifications.
   try {
-    const emailPayload = {
-      sender: {
-        name: "Loop Lens",
-        email: process.env.BREVO_SENDER_EMAIL,
-      },
-      to: [{ email: lead.email, name: lead.name }],
-      bcc: [{ email: "tshabecoff@gmail.com", name: "Ted Shabecoff" }],
-      subject: `Your Circularity Snapshot Report — ${lead.company}`,
-      htmlContent,
-    };
+    const scoreMatch = reportText.match(/Score:\s*(\d+)\s*\/\s*10/);
+    const score = scoreMatch ? scoreMatch[1] + "/10" : "not parsed";
 
-    console.log("Sending email to:", lead.email, "BCC: tshabecoff@gmail.com");
-    console.log("Sender:", process.env.BREVO_SENDER_EMAIL);
+    const answersFull = Object.entries(QUESTION_LABELS)
+      .map(([id, label]) => {
+        const v = val(answers[id]);
+        return v ? `${label}: ${v}` : null;
+      })
+      .filter(Boolean)
+      .join(" | ");
 
-    const emailRes = await fetch("https://api.brevo.com/v3/smtp/email", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "api-key": process.env.BREVO_API_KEY,
-      },
-      body: JSON.stringify(emailPayload),
+    const payload = new URLSearchParams({
+      "form-name":   "circularity-lead",
+      name:          lead.name    || "",
+      email:         lead.email   || "",
+      company:       lead.company || "",
+      score:         score,
+      industry:      val(answers.industry),
+      size:          val(answers.size),
+      geography:     val(answers.geography),
+      csrd:          val(answers.csrd),
+      scope3:        val(answers.scope3),
+      ce_strategy:   val(answers.ce_strategy),
+      barriers:      val(answers.barriers),
+      answers_full:  answersFull,
     });
 
-    const emailData = await emailRes.json();
-    console.log("Brevo email response status:", emailRes.status);
-    console.log("Brevo email response:", JSON.stringify(emailData));
+    // process.env.URL is set automatically by Netlify to the site's primary URL
+    const siteUrl = process.env.URL || "https://circularity.looplens.co";
 
-    if (!emailRes.ok) {
-      console.error("Brevo email failed:", JSON.stringify(emailData));
+    const formRes = await fetch(siteUrl + "/", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: payload.toString(),
+    });
+
+    console.log("Netlify Forms status:", formRes.status);
+    if (!formRes.ok) {
+      console.error("Netlify Forms rejected the submission:", formRes.status, await formRes.text());
+    } else {
+      console.log("Lead captured:", lead.email, "| score:", score);
     }
 
   } catch (err) {
-    console.error("Email error:", err.message);
-  }
-
-  // ── 3. Log lead in Brevo CRM (non-fatal) ─────────────────────────────────
-  try {
-    const scoreMatch = reportText.match(/Score:\s*(\d+)\/10/);
-    const score = scoreMatch ? scoreMatch[1] : "unknown";
-
-    const crmRes = await fetch("https://api.brevo.com/v3/contacts", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "api-key": process.env.BREVO_API_KEY,
-      },
-      body: JSON.stringify({
-        email: lead.email,
-        attributes: {
-          FIRSTNAME: lead.name.split(" ")[0] || lead.name,
-          LASTNAME:  lead.name.split(" ").slice(1).join(" ") || "",
-          COMPANY:   lead.company,
-          CIRCULARITY_SCORE: score,
-          SOURCE: "Circularity Snapshot Tool",
-        },
-        listIds: [],
-        updateEnabled: true,
-      }),
-    });
-
-    const crmData = await crmRes.json();
-    console.log("Brevo CRM response:", emailRes.status, JSON.stringify(crmData));
-
-  } catch (err) {
-    console.error("Brevo CRM error:", err.message);
+    // Never block the user's report on a notification failure
+    console.error("Lead notification failed:", err.message);
   }
 
   return {
